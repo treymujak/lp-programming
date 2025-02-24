@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Refinery LP Solver</title>
+    <script src="/html/glpk.js-master/dist/index.js"></script>
+    <script type="module"> import GLPK from html/glpk.js-master/dist/index.js
+    window.GLPK = GLPK ;
+</script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; padding: 20px; }
+        .container { max-width: 600px; margin: auto; }
+        h2 { text-align: center; }
+        label { font-weight: bold; }
+        input { width: 100%; padding: 8px; margin: 5px 0; }
+        button { width: 100%; padding: 10px; background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #45a049; }
+        .result { background: #f4f4f4; padding: 10px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Refinery LP Solver</h2>
+        <form id="lp-form">
+            <label>Profit per barrel of Gasoline ($):</label>
+            <input type="number" id="profit_gas" value="90" required>
+            
+            <label>Profit per barrel of Diesel ($):</label>
+            <input type="number" id="profit_diesel" value="80" required>
+            
+            <label>Max Light Crude Processed (barrels):</label>
+            <input type="number" id="max_light" value="5000" required>
+            
+            <label>Max Heavy Crude Processed (barrels):</label>
+            <input type="number" id="max_heavy" value="5000" required>
+            
+            <label>Total Refinery Capacity (barrels):</label>
+            <input type="number" id="total_capacity" value="10000" required>
+            
+            <label>Gasoline Yield from Light Crude:</label>
+            <input type="number" id="yield_gas_light" step="0.01" value="0.6" required>
+            
+            <label>Diesel Yield from Light Crude:</label>
+            <input type="number" id="yield_diesel_light" step="0.01" value="0.3" required>
+            
+            <label>Gasoline Yield from Heavy Crude:</label>
+            <input type="number" id="yield_gas_heavy" step="0.01" value="0.4" required>
+            
+            <label>Diesel Yield from Heavy Crude:</label>
+            <input type="number" id="yield_diesel_heavy" step="0.01" value="0.5" required>
+            
+            <label>Max Gasoline Demand (barrels):</label>
+            <input type="number" id="max_gasoline" value="7000" required>
+            
+            <label>Max Diesel Demand (barrels):</label>
+            <input type="number" id="max_diesel" value="5000" required>
+            
+            <button type="button" onclick="solveLP()">Calculate</button>
+        </form>
+        
+        <div class="result" id="result">
+            <h3>Results</h3>
+            <p><strong>Optimal Light Crude Processed:</strong> <span id="opt_light">-</span> barrels</p>
+            <p><strong>Optimal Heavy Crude Processed:</strong> <span id="opt_heavy">-</span> barrels</p>
+            <p><strong>Maximum Profit:</strong> $<span id="opt_profit">-</span></p>
+        </div>
+    </div>
+
+    <script>
+        async function solveLP() {
+            if (typeof GLPK === 'undefined') {
+                console.error("GLPK is not loaded properly.");
+                alert("Error: GLPK library is not loaded. Ensure glpk.js is properly included.");
+                return;
+            }
+            
+            const glpk = await GLPK();
+            const lp = {
+                name: "Refinery Optimization",
+                objective: {
+                    direction: glpk.GLP_MAX,
+                    name: "profit",
+                    vars: {
+                        light: Number(document.getElementById("profit_gas").value) * Number(document.getElementById("yield_gas_light").value) +
+                               Number(document.getElementById("profit_diesel").value) * Number(document.getElementById("yield_diesel_light").value),
+                        heavy: Number(document.getElementById("profit_gas").value) * Number(document.getElementById("yield_gas_heavy").value) +
+                               Number(document.getElementById("profit_diesel").value) * Number(document.getElementById("yield_diesel_heavy").value)
+                    }
+                },
+                subjectTo: [
+                    { name: "Total Capacity", vars: { light: 1, heavy: 1 }, bnds: { type: glpk.GLP_UP, ub: Number(document.getElementById("total_capacity").value) } },
+                    { name: "Max Light", vars: { light: 1 }, bnds: { type: glpk.GLP_UP, ub: Number(document.getElementById("max_light").value) } },
+                    { name: "Max Heavy", vars: { heavy: 1 }, bnds: { type: glpk.GLP_UP, ub: Number(document.getElementById("max_heavy").value) } },
+                    { name: "Max Gasoline", vars: { light: Number(document.getElementById("yield_gas_light").value), heavy: Number(document.getElementById("yield_gas_heavy").value) }, bnds: { type: glpk.GLP_UP, ub: Number(document.getElementById("max_gasoline").value) } },
+                    { name: "Max Diesel", vars: { light: Number(document.getElementById("yield_diesel_light").value), heavy: Number(document.getElementById("yield_diesel_heavy").value) }, bnds: { type: glpk.GLP_UP, ub: Number(document.getElementById("max_diesel").value) } }
+                ],
+                bounds: [
+                    { name: "light", type: glpk.GLP_LO, lb: 0 },
+                    { name: "heavy", type: glpk.GLP_LO, lb: 0 }
+                ],
+                types: { light: glpk.GLP_CONTINUOUS, heavy: glpk.GLP_CONTINUOUS }
+            };
+            
+            const res = await glpk.solve(lp, glpk.GLP_MSG_OFF);
+            document.getElementById("opt_light").innerText = res.result.vars.light.toFixed(2);
+            document.getElementById("opt_heavy").innerText = res.result.vars.heavy.toFixed(2);
+            document.getElementById("opt_profit").innerText = res.result.z.toFixed(2);
+        }
+    </script>
+</body>
+</html>
